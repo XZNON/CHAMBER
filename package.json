@@ -1,0 +1,42 @@
+{
+  "name": "chamber",
+  "version": "1.0.0",
+  "description": "Chamber is a coding agent, that manages, writes and creates your codebases efficiently.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XZNON/chamber.git"
+  },
+  "keywords": [
+    "chamber",
+    "ai-agent",
+    "coding-agent",
+    "llm"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/XZNON/chamber/issues"
+  },
+  "homepage": "https://github.com/XZNON/chamber#readme",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
+    "dotenv": "^17.4.2",
+    "openai": "^6.35.0"
+  }
+}
