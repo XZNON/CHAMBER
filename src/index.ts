@@ -1,110 +1,88 @@
-/**
- * Claude Code from Scratch — Chapter 3: System Prompts
- *
- * WHAT'S NEW IN THIS CHAPTER:
- *   - Real system prompt loaded from a template file
- *   - Template variable injection (OS, shell, cwd, date)
- *   - Environment detection
- *   - Multi-turn conversation (the model now remembers previous turns!)
- *   - Conversation statistics display
- *
- * CONTEXT ENGINEERING CONCEPTS:
- *   - System prompt design (identity, rules, format, safety)
- *   - Instruction hierarchy (system > user > assistant > tool_result)
- *   - Template variables / dynamic system prompts
- *   - Multi-turn conversation via message history resending
- *
- * Usage:
- *   npx tsx src/index.ts
- *
- * Type a message and press Enter to chat. The model now remembers
- * the conversation! Type "quit" to exit, "/clear" to reset.
- */
-
-// Must be the first import — silences Node's DEP0040 punycode warning
-// before @anthropic-ai/sdk's transitive dependencies are loaded.
+import "dotenv/config";
 import "./silence.js";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import * as readline from "node:readline";
-import { config } from "./config.js";
+import { config, getActiveModel, getActiveModelName } from "./config.js";
 import {
   TokenTracker,
   calculateBudget,
   formatTokenCount,
   contextUtilization,
 } from "./core/tokens.js";
-
-import { buildSystemPrompt } from "./core/system-promp.js";
+import { buildSystemPrompt } from "./core/system-prompt.js";
 import {
   detectEnvironment,
   formatEnvironmentForDisplay,
 } from "./core/environment.js";
-import { Conversation } from "./core/conversatin.js";
+import { Conversation } from "./core/conversation.js";
+import type { Message } from "./core/messages.js";
 
 // -----------------------------------------------------------------------
 // Initialize
 // -----------------------------------------------------------------------
 
-const client = new Anthropic();
+const anthropic = new Anthropic();
+const openai = new OpenAI();
 const tokenTracker = new TokenTracker();
 const conversation = new Conversation();
-
-// Build the system prompt with environment variables injected
 const systemPrompt = buildSystemPrompt();
 
 // -----------------------------------------------------------------------
-// Multi-Turn Chat
-//
-// CONTEXT ENGINEERING CONCEPT: Conversation History
-//
-// THIS IS THE KEY CHANGE FROM CHAPTER 2.
-//
-// In Chapter 2, we sent a single message per API call — no history.
-// Now, we maintain a Conversation object that accumulates all
-// messages. Every API call sends the FULL HISTORY.
-//
-// The model sees:
-//   [system prompt] + [user 1] + [assistant 1] + [user 2] + ...
-//
-// This creates the illusion of memory. The model doesn't actually
-// remember anything — we just resend everything it needs to know.
+// Multi-Turn Chat — routes to Anthropic or OpenAI based on config
 // -----------------------------------------------------------------------
 
 async function chat(userInput: string): Promise<string> {
-  // Add the user's message to conversation history
   conversation.addUserMessage(userInput);
 
-  const message = await client.messages.create({
-    model: config.model,
-    max_tokens: config.maxTokens,
-    system: systemPrompt.text,
-    messages: conversation.getMessages(), // ← FULL HISTORY sent every time
-  });
+  const activeModel = getActiveModel();
+  const modelName = getActiveModelName();
+  let responseText: string;
+  let inputTokens: number;
+  let outputTokens: number;
 
-  // Record token usage
-  tokenTracker.recordUsage({
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
-  });
+  if (activeModel.provider === "anthropic") {
+    const message = await anthropic.messages.create({
+      model: modelName,
+      max_tokens: config.maxTokens,
+      system: systemPrompt.text,
+      messages: conversation.getMessages(),
+    });
+    const textBlock = message.content.find((block) => block.type === "text");
+    responseText =
+      textBlock && textBlock.type === "text"
+        ? textBlock.text
+        : "(no text response)";
+    inputTokens = message.usage.input_tokens;
+    outputTokens = message.usage.output_tokens;
+  } else {
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt.text },
+      ...conversation.getMessages().map((m: Message) => ({
+        role: m.role as "user" | "assistant",
+        content: typeof m.content === "string" ? m.content : "",
+      })),
+    ];
+    const completion = await openai.chat.completions.create({
+      model: modelName,
+      max_tokens: config.maxTokens,
+      messages,
+    });
+    responseText =
+      completion.choices[0]?.message?.content ?? "(no text response)";
+    inputTokens = completion.usage?.prompt_tokens ?? 0;
+    outputTokens = completion.usage?.completion_tokens ?? 0;
+  }
 
-  // Extract text from response
-  const textBlock = message.content.find((block) => block.type === "text");
-  const responseText =
-    textBlock && textBlock.type === "text"
-      ? textBlock.text
-      : "(no text response)";
-
-  // Add assistant response to conversation history
+  tokenTracker.recordUsage({ inputTokens, outputTokens });
   conversation.addAssistantMessage(responseText);
 
-  // Display per-turn stats
-  const budget = calculateBudget();
-  const utilization = contextUtilization(message.usage.input_tokens);
+  const utilization = contextUtilization(inputTokens);
   const stats = conversation.getStats();
 
   console.log();
   console.log(
-    `  [Turn ${stats.turnCount}] ${message.usage.input_tokens} in → ${message.usage.output_tokens} out | Window: ${utilization.toFixed(1)}% used`,
+    `  [Turn ${stats.turnCount}] ${inputTokens} in → ${outputTokens} out | Window: ${utilization.toFixed(1)}% used`,
   );
   console.log();
 
@@ -112,25 +90,41 @@ async function chat(userInput: string): Promise<string> {
 }
 
 // -----------------------------------------------------------------------
-// Main — CLI Loop with Multi-Turn
+// Main — CLI Loop
 // -----------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  const terminalWidth = process.stdout.columns || 100;
+  const quarterIdx = Math.floor(0.15 * terminalWidth);
+  const padding = " ".repeat(quarterIdx);
   const budget = calculateBudget();
   const env = detectEnvironment();
 
-  console.log("=".repeat(60));
-  console.log("  Claude Code from Scratch — Chapter 3");
-  console.log("  System Prompts: Programming the Brain");
-  console.log("=".repeat(60));
+  console.log("=".repeat(terminalWidth));
+  console.log("=".repeat(terminalWidth));
+  console.log("=".repeat(terminalWidth));
+  const bigChamber = [
+    "  ███  █   █  ███  █   █  ████  █████   █████  ",
+    "██     █   █ █   █ ██ ██  █   █ ██      █   ██ ",
+    "██     █████ █████ █ █ █  ████  █████   ████   ",
+    "██     █   █ █   █ █   █  █   █ ██      █  ██  ",
+    "  ███  █   █ █   █ █   █  ████  █████   █   ██ ",
+  ];
+  bigChamber.forEach((line) => {
+    console.log(padding + line);
+  });
+  console.log("=".repeat(terminalWidth));
+  console.log("=".repeat(terminalWidth));
+  console.log("=".repeat(terminalWidth));
   console.log();
   console.log(formatEnvironmentForDisplay(env));
   console.log();
-  console.log(`  Model:          ${config.model}`);
+  console.log(
+    `  Model:          ${getActiveModelName()} (${getActiveModel().provider})`,
+  );
   console.log(`  Context window: ${formatTokenCount(budget.total)} tokens`);
   console.log(`  System prompt:  ~${systemPrompt.estimatedTokens} tokens`);
   console.log();
-  console.log("  The model now remembers the conversation!");
   console.log(
     "  Commands: /clear (reset), /stats (usage), /prompt (view), quit",
   );
@@ -151,7 +145,6 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Handle exit
       if (
         trimmed.toLowerCase() === "quit" ||
         trimmed.toLowerCase() === "exit"
@@ -164,18 +157,13 @@ async function main(): Promise<void> {
         console.log(`  History tokens: ~${stats.estimatedTokens}`);
         console.log("-".repeat(60));
         console.log();
-        console.log(
-          "  Chapter 3 complete. Next: Ch 4 — Conversation Management",
-        );
-        console.log();
         rl.close();
         return;
       }
 
-      // Handle slash commands
       if (trimmed.toLowerCase() === "/clear") {
         conversation.clear();
-        console.log("  Conversation cleared. Starting fresh.\n");
+        console.log("  Conversation cleared.\n");
         prompt();
         return;
       }
@@ -210,14 +198,17 @@ async function main(): Promise<void> {
 
       try {
         const response = await chat(trimmed);
-        console.log(`Claude: ${response}`);
+        console.log(`CHAMBER: ${response}`);
         console.log();
       } catch (error) {
         if (error instanceof Error) {
           console.error(`Error: ${error.message}`);
-          if (error.message.includes("API key")) {
+          if (
+            error.message.includes("API key") ||
+            error.message.includes("apiKey")
+          ) {
             console.error(
-              "Hint: Set ANTHROPIC_API_KEY in your environment or .env file.",
+              `Hint: Set ${getActiveModel().provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"} in your .env file.`,
             );
           }
         }

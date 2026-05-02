@@ -22,7 +22,7 @@
  * In Part 13, we'll refine this with API-based token counting.
  */
 
-import { config, pricing } from "../config.js";
+import { config, pricing, getActiveModelName } from "../config.js";
 
 // -----------------------------------------------------------------------
 // Token Estimation
@@ -82,7 +82,7 @@ export const CONTEXT_WINDOWS: Record<string, number> = {
  * Get the context window size for the current model.
  */
 export function getContextWindowSize(): number {
-  return CONTEXT_WINDOWS[config.model] ?? 200_000;
+  return CONTEXT_WINDOWS[getActiveModelName()] ?? 200_000;
 }
 
 // -----------------------------------------------------------------------
@@ -134,7 +134,7 @@ export class TokenTracker {
    * Get the cumulative session usage with cost estimate.
    */
   getSessionUsage(): SessionUsage {
-    const modelPricing = pricing[config.model as keyof typeof pricing];
+    const modelPricing = pricing[getActiveModelName() as keyof typeof pricing];
 
     const inputCost = modelPricing
       ? (this.totalInput / 1_000_000) * modelPricing.input

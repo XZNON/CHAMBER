@@ -13,7 +13,7 @@
  */
 
 export const config = {
-  defaultModel: "smart" as const,
+  defaultModel: "fast" as const,
 
   model: {
     smart: {
@@ -34,6 +34,16 @@ export const config = {
 
   systemPromptVersion: "0.1.0",
 } as const;
+
+export type ModelTier = keyof typeof config.model;
+
+export function getActiveModel(): { provider: string; model: string } {
+  return config.model[config.defaultModel];
+}
+
+export function getActiveModelName(): string {
+  return config.model[config.defaultModel].model;
+}
 /**
  * Token pricing (as of 2025, per million tokens).
  * Used for cost estimation in later Parts (Ch 13).
