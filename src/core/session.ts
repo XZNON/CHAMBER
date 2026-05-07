@@ -50,7 +50,7 @@ const BUDGET_CRITICAL = 0.8;
 export class Session {
   private messages: Message[] = [];
   private id: string;
-  private name: string;
+  private name?: string;
   private createdAt: string;
   private model: string;
   private systemPrompt: string;
@@ -60,7 +60,7 @@ export class Session {
     this.createdAt = new Date().toISOString();
     this.model = model;
     this.systemPrompt = systemPrompt;
-    this.name = name ?? "(no name yet)";
+    this.name = name;
   } //name issue
 
   rename(name: string): void {
@@ -105,7 +105,7 @@ export class Session {
       messageCount: this.messages.length,
       turnCount: Math.floor(this.messages.length / 2),
       estimatedTokens,
-      name: this.name,
+      name: this.name ?? "(No name)",
     };
   }
 

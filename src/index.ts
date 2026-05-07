@@ -17,6 +17,10 @@ import {
 } from "./core/environment.js";
 import { Session } from "./core/session.js";
 import type { Message } from "./core/messages.js";
+import { SessionManager } from "./core/history.js";
+import { copyFile, stat } from "node:fs";
+import { constrainedMemory } from "node:process";
+import { setMaxIdleHTTPParsers } from "node:http";
 
 // -----------------------------------------------------------------------
 // Initialize
@@ -25,11 +29,32 @@ import type { Message } from "./core/messages.js";
 const anthropic = new Anthropic();
 const openai = new OpenAI();
 const tokenTracker = new TokenTracker();
-const session = new Session();
+// const session = new Session(); //dont create here; resume session added for this
 const systemPrompt = buildSystemPrompt();
+const sessionManager = new SessionManager();
+
+const resumeChat = process.argv.includes("--resume");
+
+let session: Session;
+
+if (resumeChat) {
+  const saved = sessionManager.list();
+  if (saved.length > 0) {
+    const mostRecent = sessionManager.load(saved[0].id);
+    if (mostRecent) {
+      session = Session.fromSaved(mostRecent);
+    } else {
+      session = new Session(getActiveModelName(), systemPrompt.text);
+    }
+  } else {
+    session = new Session(getActiveModelName(), systemPrompt.text);
+  }
+} else {
+  session = new Session(getActiveModelName(), systemPrompt.text);
+}
 
 // -----------------------------------------------------------------------
-// Multi-Turn Chat — routes to Anthropic or OpenAI based on config
+// Multi-Turn Chat — routes to Anthropic or OpenAI based on config // (to-do: add other models.)
 // -----------------------------------------------------------------------
 
 async function chat(userInput: string): Promise<string> {
@@ -80,6 +105,13 @@ async function chat(userInput: string): Promise<string> {
   const utilization = contextUtilization(inputTokens);
   const stats = session.getStats();
 
+  let warning = "";
+  if (stats.budgetWarning == "caution") {
+    warning = "*** CAUTION : Your have used 60% of your context. Be aware.";
+  } else if (stats.budgetWarning == "critical") {
+    ("*** WARNING : You have used 80% of your context. Its recommended to use /clear to free up context ");
+  }
+
   console.log();
   console.log(
     `  [Turn ${stats.turnCount}] ${inputTokens} in → ${outputTokens} out | Window: ${utilization.toFixed(1)}% used`,
@@ -99,6 +131,7 @@ async function main(): Promise<void> {
   const padding = " ".repeat(quarterIdx);
   const budget = calculateBudget();
   const env = detectEnvironment();
+  const stats = session.getStats();
 
   console.log("=".repeat(terminalWidth));
   console.log("=".repeat(terminalWidth));
@@ -125,9 +158,17 @@ async function main(): Promise<void> {
   );
   console.log(`  Context window: ${formatTokenCount(budget.total)} tokens`);
   console.log(`  System prompt:  ~${systemPrompt.estimatedTokens} tokens`);
+  console.log(`  Session: ${stats.name ? stats.name : stats.id}`);
+  console.log();
+
+  if (!session.isEmpty()) {
+    console.log(
+      `  Resumed:       ${stats.turnCount} turns, ~${stats.estimatedTokens} tokens of history.`,
+    );
+  }
   console.log();
   console.log(
-    "  Commands: /clear (reset), /stats (usage), /prompt (view), quit",
+    "  Commands: /clear (reset), /stats (usage), /prompt (view), /save, /history, /resume, /rename, quit",
   );
   console.log("-".repeat(60));
   console.log();
@@ -162,6 +203,64 @@ async function main(): Promise<void> {
         return;
       }
 
+      if (trimmed.toLowerCase() == "/save") {
+        session.save(sessionManager);
+        console.log(`  Session saved ${session.getId()}\n`);
+        prompt();
+        return;
+      }
+
+      if (trimmed.toLocaleLowerCase() == "/history") {
+        const saved = sessionManager.list();
+        if (saved.length === 0) {
+          console.log("   No pas sessions active.");
+        } else {
+          console.log();
+          console.log("  Past sessions:\n");
+          for (const s of saved.slice(0, 10)) {
+            const displayName = s.name ? `[${s.name}]` : s.id;
+            console.log(
+              `   ${s.id} : ${displayName.padEnd(25)} (${s.turnCount} turns) : ${s.preview}`,
+            );
+          }
+          console.log();
+        }
+        prompt();
+        return;
+      }
+
+      if (trimmed.toLocaleLowerCase().startsWith("/resume")) {
+        const parts = trimmed.split(/\s+/);
+        let targetId: string | undefined;
+
+        if (parts.length > 1) {
+          targetId = parts[1]; //either we can do it with name or we can do it with id? (probably we can make the name the first 2 words of the initial prompt?)
+        } else {
+          const saved = sessionManager.list();
+          if (saved.length > 0) {
+            targetId = saved[0].id;
+          }
+        }
+
+        if (targetId) {
+          const loaded = sessionManager.load(targetId);
+          if (loaded) {
+            session = Session.fromSaved(loaded);
+            const resumedStats = session.getStats();
+            console.log(
+              `  Resumed session ${targetId} (${resumedStats.turnCount} turns)\n`,
+            );
+          } else {
+            console.log(` Session ${targetId} not found.\n`);
+          }
+        } else {
+          console.log("  No sessions found in local storage");
+        }
+
+        prompt();
+        return;
+      }
+
       if (trimmed.toLowerCase() === "/clear") {
         session.clear();
         console.log("  session cleared.\n");
@@ -170,14 +269,24 @@ async function main(): Promise<void> {
       }
 
       if (trimmed.toLocaleLowerCase().startsWith("/rename")) {
-        const parts = trimmed.split(" ");
-        const newName = parts.splice(1).join(" ").trim();
+        const parts = trimmed.split(/\s+/);
 
-        if (!newName) {
-          console.log("Please enter a valid name. Usage: /rename <new name>\n");
+        let newName: string | undefined;
+
+        if (parts.length > 1) {
+          newName = parts[1];
         } else {
+          console.log(`Please enter the session name after /rename "XXXXXX".`);
+          prompt();
+          return;
+        }
+
+        if (newName) {
           session.rename(newName);
+          session.save(sessionManager);
           console.log(`Session name changed to: "${newName}"\n`);
+        } else {
+          console.log(`Unabe to save the session name, no name provided.`);
         }
         prompt();
         return;

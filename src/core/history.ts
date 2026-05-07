@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 export interface SavedSession {
   id: string;
-  name: string;
+  name?: string;
   createdAt: string;
   updatedAt: string;
   model: string;
@@ -24,7 +24,7 @@ export interface SavedSession {
 
 export interface SessionSummary {
   id: string;
-  name: string;
+  name?: string;
   createdAt: string;
   updatedAt: string;
   turnCount: number;
@@ -93,9 +93,7 @@ export class SessionManager {
 
         summaries.push({
           id: session.id,
-          name: session.name
-            ? session.name
-            : "(No name yet, use /rename to rename the session)",
+          name: session.name,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
           turnCount: session.turnCount,
