@@ -32,7 +32,7 @@ import OpenAI from "openai";
 // descriptive names so our codebase is self-documenting.
 // -----------------------------------------------------------------------
 
-/** A single message in the conversation (user or assistant turn). */
+/** A single message in the Session (user or assistant turn). */
 export type Message = Anthropic.MessageParam;
 
 /** Content within a message: text, images, tool_use, or tool_result. */

@@ -1,25 +1,7 @@
 /**
  * Token Counting Utility — Part 2
  *
- * CONTEXT ENGINEERING CONCEPT: Tokens and Context Windows
- *
- * Tokens are the atomic unit of context. Every piece of information
- * that flows into an LLM — system prompts, messages, tool definitions,
- * file contents — is measured in tokens. Understanding token counts
- * is essential for context engineering because:
- *
- *   1. Context windows have FIXED TOKEN LIMITS (e.g., 200K for Claude)
- *   2. Every token costs money (input and output are priced per million)
- *   3. Token budget must be allocated across competing needs:
- *      system prompt + tools + memory + history + current turn + output
- *
- * This module provides token estimation and budget tracking.
- *
- * NOTE: We use a character-based estimator (1 token ≈ 4 characters for
- * English text) because the exact tokenizer is model-specific and not
- * publicly available. The Anthropic API returns exact token counts in
- * its response, which we use for precise tracking after each call.
- * In Part 13, we'll refine this with API-based token counting.
+ * ****** use api based token counting(to-do), we'll refine this with API-based token counting.
  */
 
 import { config, pricing, getActiveModelName } from "../config.js";
@@ -111,7 +93,7 @@ export interface SessionUsage {
  *
  * CONTEXT ENGINEERING INSIGHT: Understanding your token usage
  * pattern is the first step toward optimization. Are you spending
- * most tokens on the system prompt? On tool results? On conversation
+ * most tokens on the system prompt? On tool results? On Session
  * history? This tracker reveals the pattern.
  */
 export class TokenTracker {
@@ -187,7 +169,7 @@ export class TokenTracker {
 //   │ System Prompt         ~3,000-5,000      │
 //   │ Tool Definitions      ~10,000-15,000    │
 //   │ Memory (CLAUDE.md)    ~1,000-3,000      │
-//   │ Conversation History  ~variable~        │
+//   │ Session History  ~variable~        │
 //   │ Current Turn          ~variable~        │
 //   │ ─── Reserved for Output ─── ~4,096 ──── │
 //   └─────────────────────────────────────────┘

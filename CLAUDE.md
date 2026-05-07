@@ -8,7 +8,7 @@ This file is the primary context document for any agent working in this codebase
 
 ## Project Overview
 
-CHAMBER is a terminal-based AI coding assistant. The user types a natural language message; CHAMBER responds using a configured LLM. The agent maintains full conversation history across turns, is aware of its runtime environment (OS, shell, working directory, date), and tracks token usage and cost per session.
+CHAMBER is a terminal-based AI coding assistant. The user types a natural language message; CHAMBER responds using a configured LLM. The agent maintains full Session history across turns, is aware of its runtime environment (OS, shell, working directory, date), and tracks token usage and cost per session.
 
 The project is a ground-up TypeScript rewrite of a prior Python implementation (which used LangGraph and Google Gemini). The Python code no longer exists in the repo. All active code is in `src/`.
 
@@ -20,7 +20,7 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
    - Context Eng (Part-1)
    - Tokens (Part-2)
    - Sys Prompts (Part-3)
-   - Conversation (Part-4)
+   - Session (Part-4)
 2. TOOLS & AGENCY
    - Tool Use (Part-5)
    - Agents Loop (Part-6)
@@ -46,14 +46,14 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 
 ### Done
 
-- Multi-turn conversation loop with full history resending per API call
+- Multi-turn Session loop with full history resending per API call
 - System prompt loaded from a markdown template file (`src/prompts/coding-agend.md`) with `{{variable}}` injection at runtime
 - Environment detection: OS, shell, working directory, username, date, Node version
 - Token tracking: per-turn input/output counts, session totals, cost estimation
 - Context budget calculation: window size minus `max_tokens` reserved for output
 - Model config: `smart` (Claude Sonnet), `fast`/`cheap` (GPT-4o-mini) routing
 - Pricing table for cost estimation: Claude Sonnet, Opus, Haiku, GPT-4o, GPT-4o-mini
-- CLI commands: `/clear` (reset conversation), `/stats` (usage summary), `/prompt` (view rendered system prompt), `quit`/`exit`
+- CLI commands: `/clear` (reset Session), `/stats` (usage summary), `/prompt` (view rendered system prompt), `quit`/`exit`
 - Node DEP0040 punycode warning suppressed via `silence.ts`
 - `MessageBuilder` utility for constructing user/assistant messages
 - Message utilities: `getMessageText`, `countBlocksByType`, `formatMessageForDisplay`
@@ -64,7 +64,7 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 - Agent reasoning/planning layer (no Reasoner, Orchestrator, or Executioner)
 - Persistent memory across sessions
 - OpenAI integration is configured and priced but not wired into the chat loop — all calls currently go to Anthropic
-- Conversation compression (history grows unbounded; no trimming or summarization)
+- Session compression (history grows unbounded; no trimming or summarization)
 - Sub-agent spawning
 - Streaming responses (currently waits for full response before printing)
 
@@ -94,18 +94,18 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 ```
 User types input
       ↓
-conversation.addUserMessage(input)
+Session.addUserMessage(input)
       ↓
 client.messages.create({
   model,
   max_tokens,
   system: buildSystemPrompt().text,   ← rendered template with env vars
-  messages: conversation.getMessages() ← full history every call
+  messages: Session.getMessages() ← full history every call
 })
       ↓
 tokenTracker.recordUsage(response.usage)
       ↓
-conversation.addAssistantMessage(responseText)
+Session.addAssistantMessage(responseText)
       ↓
 Print response + per-turn token stats
 ```
@@ -159,7 +159,7 @@ chamber/
 │   ├── config.ts                 # Model routing and pricing
 │   ├── silence.ts                # Punycode warning suppression
 │   ├── core/
-│   │   ├── conversatin.ts        # Conversation history manager
+│   │   ├── conversatin.ts        # Session history manager
 │   │   ├── environment.ts        # Runtime environment detection
 │   │   ├── messages.ts           # Message types, MessageBuilder, utilities
 │   │   ├── system-promp.ts       # System prompt loader and template renderer (typo in filename — do not rename without updating all imports)
@@ -198,7 +198,7 @@ npm run build
 
 | Command          | Effect                                                 |
 | ---------------- | ------------------------------------------------------ |
-| `/clear`         | Resets conversation history                            |
+| `/clear`         | Resets Session history                                 |
 | `/stats`         | Prints token counts, turns, and estimated session cost |
 | `/prompt`        | Prints the fully rendered system prompt                |
 | `quit` or `exit` | Ends the session and prints a final usage summary      |

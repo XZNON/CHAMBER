@@ -15,7 +15,7 @@ import {
   detectEnvironment,
   formatEnvironmentForDisplay,
 } from "./core/environment.js";
-import { Conversation } from "./core/conversation.js";
+import { Session } from "./core/session.js";
 import type { Message } from "./core/messages.js";
 
 // -----------------------------------------------------------------------
@@ -25,7 +25,7 @@ import type { Message } from "./core/messages.js";
 const anthropic = new Anthropic();
 const openai = new OpenAI();
 const tokenTracker = new TokenTracker();
-const conversation = new Conversation();
+const session = new Session();
 const systemPrompt = buildSystemPrompt();
 
 // -----------------------------------------------------------------------
@@ -33,7 +33,7 @@ const systemPrompt = buildSystemPrompt();
 // -----------------------------------------------------------------------
 
 async function chat(userInput: string): Promise<string> {
-  conversation.addUserMessage(userInput);
+  session.addUserMessage(userInput);
 
   const activeModel = getActiveModel();
   const modelName = getActiveModelName();
@@ -46,7 +46,7 @@ async function chat(userInput: string): Promise<string> {
       model: modelName,
       max_tokens: config.maxTokens,
       system: systemPrompt.text,
-      messages: conversation.getMessages(),
+      messages: session.getMessages(),
     });
     const textBlock = message.content.find((block) => block.type === "text");
     responseText =
@@ -58,7 +58,7 @@ async function chat(userInput: string): Promise<string> {
   } else {
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt.text },
-      ...conversation.getMessages().map((m: Message) => ({
+      ...session.getMessages().map((m: Message) => ({
         role: m.role as "user" | "assistant",
         content: typeof m.content === "string" ? m.content : "",
       })),
@@ -75,10 +75,10 @@ async function chat(userInput: string): Promise<string> {
   }
 
   tokenTracker.recordUsage({ inputTokens, outputTokens });
-  conversation.addAssistantMessage(responseText);
+  session.addAssistantMessage(responseText);
 
   const utilization = contextUtilization(inputTokens);
-  const stats = conversation.getStats();
+  const stats = session.getStats();
 
   console.log();
   console.log(
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
         console.log();
         console.log("-".repeat(60));
         console.log(tokenTracker.formatSessionSummary());
-        const stats = conversation.getStats();
+        const stats = session.getStats();
         console.log(`  Turns:          ${stats.turnCount}`);
         console.log(`  History tokens: ~${stats.estimatedTokens}`);
         console.log("-".repeat(60));
@@ -163,14 +163,28 @@ async function main(): Promise<void> {
       }
 
       if (trimmed.toLowerCase() === "/clear") {
-        conversation.clear();
-        console.log("  Conversation cleared.\n");
+        session.clear();
+        console.log("  session cleared.\n");
+        prompt();
+        return;
+      }
+
+      if (trimmed.toLocaleLowerCase().startsWith("/rename")) {
+        const parts = trimmed.split(" ");
+        const newName = parts.splice(1).join(" ").trim();
+
+        if (!newName) {
+          console.log("Please enter a valid name. Usage: /rename <new name>\n");
+        } else {
+          session.rename(newName);
+          console.log(`Session name changed to: "${newName}"\n`);
+        }
         prompt();
         return;
       }
 
       if (trimmed.toLowerCase() === "/stats") {
-        const stats = conversation.getStats();
+        const stats = session.getStats();
         const sessionUsage = tokenTracker.getSessionUsage();
         console.log();
         console.log(`  Messages:       ${stats.messageCount}`);
@@ -180,7 +194,7 @@ async function main(): Promise<void> {
           `  System prompt:  ~${systemPrompt.estimatedTokens} tokens`,
         );
         console.log(
-          `  Session cost:   $${sessionUsage.estimatedCost.toFixed(4)}`,
+          `  session cost:   $${sessionUsage.estimatedCost.toFixed(4)}`,
         );
         console.log();
         prompt();

@@ -37,7 +37,7 @@ You help users with software engineering tasks including writing code, debugging
 
 This is Part 3 of the build. Current capabilities:
 
-- Multi-turn conversation with memory (conversation history is maintained)
+- Multi-turn Session with memory (Session history is maintained)
 - Environment-aware system prompt (you know the OS, shell, and working directory)
 - Token tracking and cost estimation
 
