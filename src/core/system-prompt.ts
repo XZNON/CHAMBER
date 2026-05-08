@@ -1,7 +1,4 @@
 /**
- * System Prompt Builder — Part 3
- *
- * CONTEXT ENGINEERING CONCEPT: System Prompt Design
  *
  * The system prompt is the FOUNDATION of the context engineering stack.
  * It establishes the model's identity, capabilities, behavioral rules,
@@ -138,11 +135,9 @@ function renderTemplate(
 // -----------------------------------------------------------------------
 
 export interface SystemPromptResult {
-  /** The fully rendered system prompt text. */
   text: string;
-  /** Estimated token count. */
   estimatedTokens: number;
-  /** The template variables that were injected. */
+  // The template variables that were injected.
   variables: TemplateVariables;
 }
 

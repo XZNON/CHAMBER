@@ -18,23 +18,14 @@ import * as path from "node:path";
 import { execSync } from "node:child_process";
 
 export interface EnvironmentInfo {
-  /** Operating system: "darwin", "linux", "win32" */
   platform: string;
-  /** Human-readable OS name: "macOS", "Linux", "Windows" */
   osName: string;
-  /** OS version string */
   osVersion: string;
-  /** Current working directory */
   workingDirectory: string;
-  /** User's default shell: "/bin/zsh", "/bin/bash", etc. */
   shell: string;
-  /** Current date in ISO format */
   date: string;
-  /** Home directory */
   homeDirectory: string;
-  /** Username */
   username: string;
-  /** Node.js version */
   nodeVersion: string;
 }
 

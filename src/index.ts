@@ -170,7 +170,7 @@ async function main(): Promise<void> {
   console.log(
     "  Commands: /clear (reset), /stats (usage), /prompt (view), /save, /history, /resume, /rename, quit",
   );
-  console.log("-".repeat(60));
+  console.log("-".repeat(terminalWidth));
   console.log();
 
   const rl = readline.createInterface({
@@ -192,12 +192,12 @@ async function main(): Promise<void> {
         trimmed.toLowerCase() === "exit"
       ) {
         console.log();
-        console.log("-".repeat(60));
+        console.log("-".repeat(terminalWidth));
         console.log(tokenTracker.formatSessionSummary());
         const stats = session.getStats();
         console.log(`  Turns:          ${stats.turnCount}`);
         console.log(`  History tokens: ~${stats.estimatedTokens}`);
-        console.log("-".repeat(60));
+        console.log("-".repeat(terminalWidth));
         console.log();
         rl.close();
         return;
@@ -228,35 +228,40 @@ async function main(): Promise<void> {
         prompt();
         return;
       }
-
+      // todo : bash mode :!xcgfjsdlf for bash commands hahaha
       if (trimmed.toLocaleLowerCase().startsWith("/resume")) {
         const parts = trimmed.split(/\s+/);
-        let targetId: string | undefined;
+        let userInput: string | undefined;
+        const saved = sessionManager.list();
 
         if (parts.length > 1) {
-          targetId = parts[1]; //either we can do it with name or we can do it with id? (probably we can make the name the first 2 words of the initial prompt?)
+          userInput = parts[1];
         } else {
-          const saved = sessionManager.list();
           if (saved.length > 0) {
-            targetId = saved[0].id;
+            userInput = saved[0].id;
           }
         }
 
-        if (targetId) {
-          const loaded = sessionManager.load(targetId);
+        const found = saved.find(
+          (s) =>
+            s.name?.toLocaleLowerCase() == userInput?.toLowerCase() ||
+            s.id == userInput,
+        );
+
+        if (found) {
+          const loaded = sessionManager.load(found.id);
           if (loaded) {
             session = Session.fromSaved(loaded);
             const resumedStats = session.getStats();
             console.log(
-              `  Resumed session ${targetId} (${resumedStats.turnCount} turns)\n`,
+              `  Resumed session ${userInput} (${resumedStats.turnCount} turns)\n`,
             );
           } else {
-            console.log(` Session ${targetId} not found.\n`);
+            console.log(` Session ${userInput} not found.\n`);
           }
         } else {
           console.log("  No sessions found in local storage");
         }
-
         prompt();
         return;
       }

@@ -60,7 +60,7 @@ export class Session {
     this.createdAt = new Date().toISOString();
     this.model = model;
     this.systemPrompt = systemPrompt;
-    this.name = name;
+    this.name = name ?? this.id;
   } //name issue
 
   rename(name: string): void {
@@ -141,7 +141,12 @@ export class Session {
   }
 
   static fromSaved(saved: SavedSession): Session {
-    const conv = new Session(saved.model, saved.systemPrompt, saved.id);
+    const conv = new Session(
+      saved.model,
+      saved.systemPrompt,
+      saved.id,
+      saved.name ?? saved.id,
+    );
     conv.createdAt = saved.createdAt;
     conv.messages = [...saved.messages];
     return conv;
