@@ -10,6 +10,10 @@
 
 /**
  * Unified configuration for multi-model agent
+ *
+ * Add deepseek also to the model pool (uses openAI SDK)
+ *
+ *
  */
 
 export const config = {

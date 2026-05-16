@@ -32,16 +32,12 @@ import OpenAI from "openai";
 // descriptive names so our codebase is self-documenting.
 // -----------------------------------------------------------------------
 
-/** A single message in the Session (user or assistant turn). */
 export type Message = Anthropic.MessageParam;
 
-/** Content within a message: text, images, tool_use, or tool_result. */
 export type ContentBlock = Anthropic.ContentBlockParam;
 
-/** A text content block — the simplest form of content. */
 export type TextBlock = Anthropic.TextBlockParam;
 
-/** The role of a message: "user" or "assistant". */
 export type Role = "user" | "assistant";
 
 // -----------------------------------------------------------------------
@@ -89,13 +85,6 @@ export const MessageBuilder = {
 // Message Utilities
 // -----------------------------------------------------------------------
 
-/**
- * Extract all text content from a message, concatenated.
- *
- * Messages can contain multiple content blocks. This utility
- * extracts and joins all text blocks into a single string,
- * which is useful for display and logging.
- */
 export function getMessageText(message: Message): string {
   if (typeof message.content === "string") {
     return message.content;
@@ -107,12 +96,6 @@ export function getMessageText(message: Message): string {
     .join("\n");
 }
 
-/**
- * Count the number of content blocks in a message by type.
- *
- * Useful for understanding the composition of a message:
- * how many text blocks, how many tool_use blocks, etc.
- */
 export function countBlocksByType(message: Message): Record<string, number> {
   if (typeof message.content === "string") {
     return { text: 1 };
@@ -125,12 +108,6 @@ export function countBlocksByType(message: Message): Record<string, number> {
   return counts;
 }
 
-/**
- * Format a message for display in the CLI.
- *
- * Shows the role and a preview of the content, useful for
- * debugging and for our interactive CLI.
- */
 export function formatMessageForDisplay(
   message: Message,
   maxLength: number = 100,
