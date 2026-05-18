@@ -58,6 +58,8 @@ export const CONTEXT_WINDOWS: Record<string, number> = {
   "claude-sonnet-4-20250514": 200_000,
   "claude-opus-4-20250514": 200_000,
   "claude-haiku-3-5-20241022": 200_000,
+  "gpt-4o": 128_000,
+  "gpt-4o-mini": 128_000,
 };
 
 /**

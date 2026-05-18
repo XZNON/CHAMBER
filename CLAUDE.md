@@ -72,6 +72,7 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 - Sub-agent spawning
 - Streaming responses (currently waits for full response before printing)
 
+
 ---
 
 ## Tech Stack
@@ -121,9 +122,9 @@ Print response + per-turn token stats
 | `src/index.ts`                | CLI entry point, readline loop, slash command handling, wires all modules together                                  |
 | `src/config.ts`               | Model names, provider routing (`smart`/`fast`/`cheap`), `max_tokens`, pricing table                                |
 | `src/silence.ts`              | Suppresses Node punycode deprecation warning before any SDK imports                                                 |
-| `src/core/environment.ts`     | Detects OS, shell, cwd, username, date at runtime                                                                   |
+| `src/core/environment.ts`     | Detects OS, shell, cwd, username, date, OS version, Node version at runtime; `formatEnvironmentForDisplay` shows all fields in CLI header |
 | `src/core/system-prompt.ts`   | Loads prompt template from disk, renders `{{variable}}` placeholders, returns text + token estimate                 |
-| `src/core/session.ts`         | `Session` class: message array, `addUserMessage`, `addAssistantMessage`, `getMessages`, `getStats`, `clear`, `rename`, `save`, `fromSaved` |
+| `src/core/session.ts`         | `Session` class: message array, `addUserMessage`, `addAssistantMessage`, `getMessages`, `getRecentMessages`, `getStats` (incl. `budgetWarning`), `clear`, `rename`, `save`, `fromSaved` |
 | `src/core/history.ts`         | `SessionManager`: save/load/list/delete sessions as JSON in `data/sessions/`; `SavedSession` and `SessionSummary` types; `generateSessionId` |
 | `src/core/messages.ts`        | `MessageBuilder` (user/assistant constructors), message utility functions, re-exports Anthropic SDK types           |
 | `src/core/tokens.ts`          | `estimateTokens` (heuristic), `TokenTracker` class, `calculateBudget`, `contextUtilization`, `formatTokenCount`     |
@@ -163,6 +164,7 @@ chamber/
 │   ├── index.ts                  # CLI entry point and main loop
 │   ├── config.ts                 # Model routing and pricing
 │   ├── silence.ts                # Punycode warning suppression
+│   ├── prac.ts                   # SCRATCH FILE — linked list practice, unrelated to CHAMBER
 │   ├── core/
 │   │   ├── session.ts            # Session class: history, stats, save/load, rename
 │   │   ├── history.ts            # SessionManager: disk persistence, list/load/delete

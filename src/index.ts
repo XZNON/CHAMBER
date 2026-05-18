@@ -18,9 +18,6 @@ import {
 import { Session } from "./core/session.js";
 import type { Message } from "./core/messages.js";
 import { SessionManager } from "./core/history.js";
-import { copyFile, stat } from "node:fs";
-import { constrainedMemory } from "node:process";
-import { setMaxIdleHTTPParsers } from "node:http";
 
 // -----------------------------------------------------------------------
 // Initialize
@@ -109,13 +106,14 @@ async function chat(userInput: string): Promise<string> {
   if (stats.budgetWarning == "caution") {
     warning = "*** CAUTION : Your have used 60% of your context. Be aware.";
   } else if (stats.budgetWarning == "critical") {
-    ("*** WARNING : You have used 80% of your context. Its recommended to use /clear to free up context ");
+    warning = "*** WARNING : You have used 80% of your context. Its recommended to use /clear to free up context ";
   }
 
   console.log();
   console.log(
     `  [Turn ${stats.turnCount}] ${inputTokens} in → ${outputTokens} out | Window: ${utilization.toFixed(1)}% used`,
   );
+  if (warning) console.log(`  ${warning}`);
   console.log();
 
   return responseText;

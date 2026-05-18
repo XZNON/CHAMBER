@@ -32,7 +32,6 @@ import {
   generateSessionId,
   type SavedSession,
 } from "./history.js";
-import { Conversation } from "openai/resources/conversations.mjs";
 
 export interface SessionStats {
   id: string;
