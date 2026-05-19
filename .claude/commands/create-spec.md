@@ -1,49 +1,47 @@
 ---
-description: Create a spec file and feature branch for the next L-ESCROW step
-argument-hint: "Step number and feature name e.g. 2 registration"
+description: Create a spec file and feature branch for the next CHAMBER implementation step
+argument-hint: "Part number and feature name e.g. 5 tool-use"
 allowed-tools: Read, Write, Glob, Bash(git:*)
 ---
 
-You are a senior developer spinning up a new feature for the
-L-ESCROW. Always follow the rules in CLAUDE.md.
+You are a senior developer adding a new capability to CHAMBER, a TypeScript CLI coding agent.
+Always follow the rules in CLAUDE.md.
 
 User input: $ARGUMENTS
 
 ## Step 1 — Check working directory is clean
 
-Run `git status` and check for uncommitted, unstaged, or
-untracked files. If any exist, stop immediately and tell
-the user to commit or stash changes before proceeding.
+Run `git status` and check for uncommitted, unstaged, or untracked files.
+If any exist, stop immediately and tell the user to commit or stash changes before proceeding.
 DO NOT CONTINUE until the working directory is clean.
 
 ## Step 2 — Parse the arguments
 
 From $ARGUMENTS extract:
 
-1. `step_number` — zero-padded to 2 digits: 2 → 02, 11 → 11
+1. `part_number` — zero-padded to 2 digits: 5 → 05, 14 → 14
 
 2. `feature_title` — human readable title in Title Case
-   - Example: "Registration" or "Login and Logout"
+   - Example: "Tool Use" or "Agent Loop"
 
 3. `feature_slug` — git and file safe slug
    - Lowercase, kebab-case
    - Only a-z, 0-9 and -
    - Maximum 40 characters
-   - Example: registration, login-logout
+   - Example: tool-use, agent-loop
 
 4. `branch_name` — format: `feature/<feature_slug>`
-   - Example: `feature/registration`
+   - Example: `feature/tool-use`
 
-5. `file_path` — path to the markdown file explaining what the next feature requires.
+5. `file_path` — path to any feature notes file passed in $ARGUMENTS (optional)
 
-If you cannot infer these from $ARGUMENTS, ask the user
-to clarify before proceeding.
+If you cannot infer these from $ARGUMENTS, ask the user to clarify before proceeding.
 
 ## Step 3 — Check branch name is not taken
 
 Run `git branch` to list existing branches.
 If `branch_name` is already taken, append a number:
-`feature/registration-01`, `feature/registration-02` etc.
+`feature/tool-use-01`, `feature/tool-use-02` etc.
 
 ## Step 4 — Switch to main and pull latest
 
@@ -66,14 +64,18 @@ git checkout -b <branch_name>
 
 Read these files before writing the spec:
 
-- `CLAUDE.md` — roadmap, conventions, schema
-- `app.py` — existing routes and structure
-- `database/db.py` — existing schema and functions
+- `CLAUDE.md` — parts roadmap, implementation status, architecture, coding rules
+- `src/index.ts` — CLI entry point, slash commands, chat loop
+- `src/config.ts` — model routing and pricing
+- `src/core/session.ts` — Session class
+- `src/core/history.ts` — SessionManager
+- `src/core/tokens.ts` — token tracking and budget
+- `src/core/messages.ts` — message types and utilities
 - All files in `.claude/specs/` — avoid duplicating existing specs
-- The Feature file passed in $ARGUMENTS.
+- Any feature notes file passed in $ARGUMENTS
 
-Check `CLAUDE.md` to confirm the requested step is not already
-marked complete. If it is, warn the user and stop.
+Check `CLAUDE.md` → **Implementation Status** to confirm the requested part is listed under
+"Not Yet Implemented". If it is already marked done, warn the user and stop.
 
 ## Step 7 — Write the spec
 
@@ -85,64 +87,65 @@ Generate a spec document with this exact structure:
 
 ## Overview
 
-One paragraph describing what this feature does and why
-it exists at this stage of the L-ESCROW roadmap.
+One paragraph describing what this capability adds to CHAMBER and why it belongs at this
+stage of the roadmap (reference the Part number from CLAUDE.md).
 
 ## Depends on
 
-Which previous steps this feature requires to be complete.
+Which previously implemented parts this feature requires to be complete.
 
-## Routes
+## New modules / files to create
 
-Every new route needed:
+List every new TypeScript file with its path and one-line responsibility.
+If none: state "No new files".
 
-- `METHOD /path` — description — access level (public/logged-in)
+## Files to modify
 
-If no new routes: state "No new routes".
+Every existing file that will change, and what changes.
 
-## Database changes
+## Public interfaces
 
-Any new tables, columns, or constraints needed.
-Always verify against `database/db.py` before writing this.
-If none: state "No database changes".
+Key types, interfaces, or exported functions introduced by this feature.
+Show TypeScript signatures — no implementation detail.
 
-## Templates
+## Wiring into index.ts
 
-- **Create:** list new templates with their path
-- **Modify:** list existing templates and what changes
+Describe exactly how the new capability plugs into the existing CLI loop,
+`chat()` function, or slash-command handler.
 
-## Files to change
+## New CLI commands (if any)
 
-Every file that will be modified.
+- `/command` — description
 
-## Files to create
+If none: state "No new CLI commands".
 
-Every new file that will be created.
+## New dependencies (if any)
 
-## New dependencies
-
-Any new pip packages. If none: state "No new dependencies".
+Any new npm packages needed with a one-line reason.
+If none: state "No new dependencies".
 
 ## Rules for implementation
 
-Specific constraints Claude must follow. Always include:
+Specific constraints Claude must follow when building this feature. Always include:
 
-- No SQLAlchemy or ORMs
-- Parameterised queries only
-- Passwords hashed with werkzeug
-- Use CSS variables — never hardcode hex values
-- All templates extend `base.html`
+- TypeScript strict mode — no implicit `any`
+- ESNext modules — `import`/`export` only, never `require`
+- File imports use `.js` extensions even for `.ts` source files
+- Never couple core logic to a specific LLM provider
+- All provider calls go through the model abstraction in `config.ts`
+- Internal message format stays provider-agnostic
+- No error swallowing — errors are logged; fatal errors exit with code 1
+- Every new step must be observable (log or token stat output)
 
 ## Definition of done
 
-A specific testable checklist. Each item must be
-something that can be verified by running the app.
+A specific, testable checklist. Each item must be verifiable by running `npm start`.
 
 ---
 
 ## Step 8 — Save the spec
 
-Save to: `.claude/specs/<step_number>-<feature_slug>.md`
+Save to: `.claude/specs/<part_number>-<feature_slug>.md`
 
 ## Step 9 — Report to the user
 
@@ -150,12 +153,12 @@ Print a short summary in this exact format:
 
 ```
 Branch:    <branch_name>
-Spec file: .claude/specs/<step_number>-<feature_slug>.md
+Spec file: .claude/specs/<part_number>-<feature_slug>.md
 Title:     <feature_title>
 ```
 
 Then tell the user:
-"Review the spec at `.claude/specs/<step_number>-<feature_slug>.md`
+"Review the spec at `.claude/specs/<part_number>-<feature_slug>.md`
 then enter Plan Mode with Shift+Tab twice to begin implementation."
 
 Do not print the full spec in chat unless explicitly asked.

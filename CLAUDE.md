@@ -48,29 +48,40 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 
 - Multi-turn Session loop with full history resending per API call
 - System prompt loaded from a markdown template file (`src/prompts/coding-agent.md`) with `{{variable}}` injection at runtime
-- Environment detection: OS, shell, working directory, username, date, Node version
+- Environment detection: OS, shell, working directory, username, date, OS version, Node version
 - Token tracking: per-turn input/output counts, session totals, cost estimation
-- Context budget calculation: window size minus `max_tokens` reserved for output
+- Context budget calculation: window size minus `max_tokens` reserved for output; budget warnings at 60% / 80%
 - Model config: `smart` (Claude Sonnet), `fast`/`cheap` (GPT-4o-mini) routing; default is `fast` (OpenAI)
 - Pricing table for cost estimation: Claude Sonnet, Opus, Haiku, GPT-4o, GPT-4o-mini
-- Both Anthropic and OpenAI providers are wired into the chat loop; provider is selected based on `config.defaultModel`
+- Both Anthropic and OpenAI providers wired into the chat loop; context windows correctly set (Anthropic 200K, OpenAI 128K)
 - CLI commands: `/clear`, `/stats`, `/prompt`, `/save`, `/history`, `/resume [name|id]`, `/rename <name>`, `quit`/`exit`
 - Node DEP0040 punycode warning suppressed via `silence.ts`
 - `MessageBuilder` utility for constructing user/assistant messages
-- Message utilities: `getMessageText`, `countBlocksByType`, `formatMessageForDisplay`
-- Session persistence: sessions are saved as JSON to `data/sessions/` via `SessionManager`
-- Session resume: `--resume` CLI flag loads the most recent session at startup; `/resume [name|id]` resumes any saved session mid-chat
-- Session rename: `/rename <name>` assigns a human-readable name to the current session and auto-saves it
-- `dotenv/config` is loaded at the top of `index.ts` — both API keys are read from `.env`
+- Session persistence: sessions saved as JSON to `data/sessions/` via `SessionManager`
+- Session resume: `--resume` CLI flag loads most recent session at startup; `/resume [name|id]` resumes mid-chat
+- Session rename: `/rename <name>` assigns a human-readable name and auto-saves
+- **Tool Runtime Framework** (`src/tools/`) — pure infrastructure, no tools wired yet:
+  - `types.ts` — `ToolDefinition`, `ToolCall`, `ToolResult`, `ToolStatus`, `PermissionLevel`, `ToolCategory`, `ToolInputSchema`
+  - `registry.ts` — `ToolRegistry`: stores definitions, throws on duplicate registration
+  - `adapters.ts` — converts `ToolDefinition` → Anthropic / OpenAI wire format
+  - `context.ts` — `ToolExecutionContext`, `ToolHandler` type, `PermissionOverrideMap`
+  - `permission-gate.ts` — pure policy: `isReadOnly` → always `auto`; override → `defaultPermission`
+  - `executor.ts` — `ExecutorRegistry` + `ToolExecutor`: 8-step pipeline, timeout, `ask` prompt, hook stubs
+
+### In Progress (Specced, Not Yet Built)
+
+- **Spec 07** — `AgentMessage` normalized types replacing `Anthropic.MessageParam` in session
+- **Spec 08** — `LLMProvider` abstraction replacing dual-branch `chat()` in `index.ts`
+- **Spec 09** — `parser.ts` normalizing `LLMResponse` → `ParsedResponse` + `ToolCall[]`
 
 ### Not Yet Implemented
 
-- Tool use / function calling (no file read, write, shell execution, or code search)
-- Agent reasoning/planning layer (no Reasoner, Orchestrator, or Executioner)
-- Persistent memory across sessions (semantic/summary layer — distinct from raw session history)
-- Session compression (history grows unbounded; no trimming or summarization)
+- Tool implementations (`read_file`, `write_file`, `bash`, `list_directory`) — blocked on specs 07–09
+- Agent loop upgrade (tool_use → execute → feed back → loop)
+- Persistent memory across sessions
+- Session compression
 - Sub-agent spawning
-- Streaming responses (currently waits for full response before printing)
+- Streaming responses
 
 
 ---
@@ -104,7 +115,7 @@ User types input
       ↓
 Session.addUserMessage(input)
       ↓
-getActiveModel().provider === "anthropic"?
+getActiveModel().provider === "anthropic"?   ← tech debt: specs 07–09 replace this branch
   → anthropic.messages.create(...)
   : openai.chat.completions.create(...)
       ↓
@@ -114,6 +125,8 @@ Session.addAssistantMessage(responseText)
       ↓
 Print response + per-turn token stats
 ```
+
+**Note:** Session currently stores `Anthropic.MessageParam` — provider-coupled. Spec 07 (`AgentMessage`) and Spec 08 (`LLMProvider`) replace this with a normalized, provider-agnostic flow.
 
 ### Module Responsibilities
 
@@ -129,6 +142,12 @@ Print response + per-turn token stats
 | `src/core/messages.ts`        | `MessageBuilder` (user/assistant constructors), message utility functions, re-exports Anthropic SDK types           |
 | `src/core/tokens.ts`          | `estimateTokens` (heuristic), `TokenTracker` class, `calculateBudget`, `contextUtilization`, `formatTokenCount`     |
 | `src/prompts/coding-agent.md` | System prompt template with `{{variable}}` slots for environment injection                                          |
+| `src/tools/types.ts`          | All tool interfaces: `ToolDefinition`, `ToolCall`, `ToolResult`, `ToolStatus`, `PermissionLevel`, `ToolCategory`    |
+| `src/tools/registry.ts`       | `ToolRegistry`: stores definitions, throws on duplicate, zero Node.js imports                                       |
+| `src/tools/adapters.ts`       | `toAnthropicTool`, `toOpenAITool`, bulk converters — only place provider tool format logic lives                    |
+| `src/tools/context.ts`        | `ToolExecutionContext` (future-shaped with stubs), `ToolHandler` type, `PermissionOverrideMap`                      |
+| `src/tools/permission-gate.ts`| `PermissionGate`: pure policy, zero I/O — `isReadOnly→auto`, override, then `defaultPermission`                    |
+| `src/tools/executor.ts`       | `ExecutorRegistry` + `ToolExecutor`: 8-step pipeline, timeout, `ask` prompt, `beforeExecute`/`afterExecute` stubs  |
 
 ### Model Routing (config.ts)
 
@@ -164,7 +183,6 @@ chamber/
 │   ├── index.ts                  # CLI entry point and main loop
 │   ├── config.ts                 # Model routing and pricing
 │   ├── silence.ts                # Punycode warning suppression
-│   ├── prac.ts                   # SCRATCH FILE — linked list practice, unrelated to CHAMBER
 │   ├── core/
 │   │   ├── session.ts            # Session class: history, stats, save/load, rename
 │   │   ├── history.ts            # SessionManager: disk persistence, list/load/delete
@@ -172,10 +190,19 @@ chamber/
 │   │   ├── messages.ts           # Message types, MessageBuilder, utilities
 │   │   ├── system-prompt.ts      # System prompt loader and template renderer
 │   │   └── tokens.ts             # Token estimation, tracking, budget calculation
+│   ├── tools/
+│   │   ├── types.ts              # ToolDefinition, ToolCall, ToolResult, all tool interfaces
+│   │   ├── registry.ts           # ToolRegistry: definition storage
+│   │   ├── adapters.ts           # Anthropic + OpenAI wire format converters
+│   │   ├── context.ts            # ToolExecutionContext, ToolHandler, PermissionOverrideMap
+│   │   ├── permission-gate.ts    # PermissionGate: pure policy, zero I/O
+│   │   └── executor.ts           # ExecutorRegistry + ToolExecutor: full pipeline
 │   └── prompts/
 │       └── coding-agent.md       # System prompt template
 ├── data/
 │   └── sessions/                 # Auto-created; saved session JSON files
+├── .claude/
+│   └── specs/                    # Implementation specs (05–09 written)
 ├── CLAUDE.md                     # This file
 ├── package.json
 ├── tsconfig.json
