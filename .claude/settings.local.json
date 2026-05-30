@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(create-spec)",
-      "Bash(npm run *)"
-    ]
-  }
-}
