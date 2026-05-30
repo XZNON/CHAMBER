@@ -6,7 +6,6 @@ export interface ParsedResponse {
   text: string;
   toolCalls: ToolCall[];
   shouldContinue: boolean;
-  stopReason: LLMResponse["stopReason"];
 }
 
 export function parseResponse(response: LLMResponse): ParsedResponse {
@@ -18,14 +17,9 @@ export function parseResponse(response: LLMResponse): ParsedResponse {
       name: block.name,
       input: block.input,
     }));
-    return {
-      text,
-      toolCalls,
-      shouldContinue: toolCalls.length > 0,
-      stopReason: response.stopReason,
-    };
+    return { text, toolCalls, shouldContinue: toolCalls.length > 0 };
   } catch {
-    return { text: "", toolCalls: [], shouldContinue: false, stopReason: response.stopReason };
+    return { text: "", toolCalls: [], shouldContinue: false };
   }
 }
 
