@@ -5,7 +5,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type Message } from "./messages.js";
+import { type AgentMessage } from "./agent-message.js";
 import { fileURLToPath } from "node:url";
 
 // Types
@@ -18,7 +18,7 @@ export interface SavedSession {
   model: string;
   turnCount: number;
   systemPrompt: string;
-  messages: Message[]; // if the messages are too big we cant store all the messages?
+  messages: AgentMessage[]; // if the messages are too big we cant store all the messages?
   summary: string; // in future also save the summary of a session for better understanding, (use a memory layer to better store summary)
 }
 
@@ -83,11 +83,8 @@ export class SessionManager {
         const firstUserMessage = session.messages.find(
           (m) => m.role === "user",
         );
-        if (firstUserMessage) {
-          const text =
-            typeof firstUserMessage.content == "string"
-              ? firstUserMessage.content
-              : "(structured content)";
+        if (firstUserMessage && firstUserMessage.role === "user") {
+          const text = firstUserMessage.content;
           preview = text.length > 60 ? text.slice(0, 60) + "..." : text;
         }
 

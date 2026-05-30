@@ -41,7 +41,12 @@ export const config = {
 
 export type ModelTier = keyof typeof config.model;
 
-export function getActiveModel(): { provider: string; model: string } {
+export interface ActiveModelConfig {
+  provider: "anthropic" | "openai";
+  model: string;
+}
+
+export function getActiveModel(): ActiveModelConfig {
   return config.model[config.defaultModel];
 }
 

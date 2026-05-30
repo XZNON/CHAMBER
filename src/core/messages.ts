@@ -23,7 +23,17 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+
+export type {
+  AgentMessage,
+  UserMessage,
+  AssistantMessage,
+  SystemMessage,
+  ToolResultMessage,
+  AssistantContentBlock,
+  TextContent,
+  ToolCallContent,
+} from "./agent-message.js";
 
 // -----------------------------------------------------------------------
 // Type aliases for clarity
@@ -32,6 +42,7 @@ import OpenAI from "openai";
 // descriptive names so our codebase is self-documenting.
 // -----------------------------------------------------------------------
 
+/** @deprecated Use AgentMessage from agent-message.ts. Removed in spec 08. */
 export type Message = Anthropic.MessageParam;
 
 export type ContentBlock = Anthropic.ContentBlockParam;
@@ -96,6 +107,17 @@ export function getMessageText(message: Message): string {
     .join("\n");
 }
 
+export function formatMessageForDisplay(
+  message: Message,
+  maxLength: number = 100,
+): string {
+  const text = getMessageText(message);
+  const truncated =
+    text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+  const roleLabel = message.role === "user" ? "You" : "CHAMBER";
+  return `${roleLabel}: ${truncated}`;
+}
+
 export function countBlocksByType(message: Message): Record<string, number> {
   if (typeof message.content === "string") {
     return { text: 1 };
@@ -106,15 +128,4 @@ export function countBlocksByType(message: Message): Record<string, number> {
     counts[block.type] = (counts[block.type] || 0) + 1;
   }
   return counts;
-}
-
-export function formatMessageForDisplay(
-  message: Message,
-  maxLength: number = 100,
-): string {
-  const text = getMessageText(message);
-  const truncated =
-    text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
-  const roleLabel = message.role === "user" ? "You" : "CHAMBER";
-  return `${roleLabel}: ${truncated}`;
 }

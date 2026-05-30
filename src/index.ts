@@ -1,9 +1,7 @@
 import "dotenv/config";
 import "./silence.js";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import * as readline from "node:readline";
-import { config, getActiveModel, getActiveModelName } from "./config.js";
+import { getActiveModel, getActiveModelName } from "./config.js";
 import {
   TokenTracker,
   calculateBudget,
@@ -16,15 +14,15 @@ import {
   formatEnvironmentForDisplay,
 } from "./core/environment.js";
 import { Session } from "./core/session.js";
-import type { Message } from "./core/messages.js";
+import { getTextContent } from "./core/agent-message.js";
 import { SessionManager } from "./core/history.js";
+import { createProvider } from "./providers/index.js";
 
 // -----------------------------------------------------------------------
 // Initialize
 // -----------------------------------------------------------------------
 
-const anthropic = new Anthropic();
-const openai = new OpenAI();
+const provider = createProvider(getActiveModel());
 const tokenTracker = new TokenTracker();
 // const session = new Session(); //dont create here; resume session added for this
 const systemPrompt = buildSystemPrompt();
@@ -57,44 +55,9 @@ if (resumeChat) {
 async function chat(userInput: string): Promise<string> {
   session.addUserMessage(userInput);
 
-  const activeModel = getActiveModel();
-  const modelName = getActiveModelName();
-  let responseText: string;
-  let inputTokens: number;
-  let outputTokens: number;
-
-  if (activeModel.provider === "anthropic") {
-    const message = await anthropic.messages.create({
-      model: modelName,
-      max_tokens: config.maxTokens,
-      system: systemPrompt.text,
-      messages: session.getMessages(),
-    });
-    const textBlock = message.content.find((block) => block.type === "text");
-    responseText =
-      textBlock && textBlock.type === "text"
-        ? textBlock.text
-        : "(no text response)";
-    inputTokens = message.usage.input_tokens;
-    outputTokens = message.usage.output_tokens;
-  } else {
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt.text },
-      ...session.getMessages().map((m: Message) => ({
-        role: m.role as "user" | "assistant",
-        content: typeof m.content === "string" ? m.content : "",
-      })),
-    ];
-    const completion = await openai.chat.completions.create({
-      model: modelName,
-      max_tokens: config.maxTokens,
-      messages,
-    });
-    responseText =
-      completion.choices[0]?.message?.content ?? "(no text response)";
-    inputTokens = completion.usage?.prompt_tokens ?? 0;
-    outputTokens = completion.usage?.completion_tokens ?? 0;
-  }
+  const response = await provider.generate(session.getMessages(), systemPrompt.text);
+  const responseText = getTextContent(response.message) || "(no text response)";
+  const { inputTokens, outputTokens } = response.usage;
 
   tokenTracker.recordUsage({ inputTokens, outputTokens });
   session.addAssistantMessage(responseText);

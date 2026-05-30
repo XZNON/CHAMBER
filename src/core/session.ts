@@ -25,7 +25,11 @@
  * the model has no idea it ever happened.
  */
 
-import { MessageBuilder, getMessageText, type Message } from "./messages.js";
+import {
+  type AgentMessage,
+  type AssistantContentBlock,
+  getTextContent,
+} from "./agent-message.js";
 import { estimateTokens, calculateBudget } from "./tokens.js";
 import {
   SessionManager,
@@ -47,7 +51,7 @@ const BUDGET_CAUTION = 0.6;
 const BUDGET_CRITICAL = 0.8;
 
 export class Session {
-  private messages: Message[] = [];
+  private messages: AgentMessage[] = [];
   private id: string;
   private name?: string;
   private createdAt: string;
@@ -71,20 +75,38 @@ export class Session {
   }
 
   addUserMessage(text: string): void {
-    this.messages.push(MessageBuilder.user(text));
+    this.messages.push({ role: "user", content: text });
   }
 
   addAssistantMessage(text: string): void {
-    this.messages.push(MessageBuilder.assistant(text));
+    this.messages.push({
+      role: "assistant",
+      content: [{ type: "text", text }],
+    });
   }
 
-  getMessages(): Message[] {
+  addAssistantMessageWithBlocks(blocks: AssistantContentBlock[]): void {
+    this.messages.push({ role: "assistant", content: blocks });
+  }
+
+  addToolResult(toolCallId: string, toolName: string, content: string): void {
+    this.messages.push({ role: "tool_result", toolCallId, toolName, content });
+  }
+
+  getMessages(): AgentMessage[] {
     return [...this.messages];
   }
 
   getStats(): SessionStats {
     const estimatedTokens = this.messages.reduce((total, msg) => {
-      const text = getMessageText(msg);
+      let text: string;
+      if (msg.role === "assistant") {
+        text = getTextContent(msg);
+      } else if (msg.role === "tool_result") {
+        text = msg.content;
+      } else {
+        text = msg.content;
+      }
       return total + estimateTokens(text);
     }, 0);
 
@@ -108,7 +130,7 @@ export class Session {
     };
   }
 
-  getRecentMessages(count: number): Message[] {
+  getRecentMessages(count: number): AgentMessage[] {
     return this.messages.slice(-count);
   }
 
@@ -140,14 +162,14 @@ export class Session {
   }
 
   static fromSaved(saved: SavedSession): Session {
-    const conv = new Session(
+    const session = new Session(
       saved.model,
       saved.systemPrompt,
       saved.id,
       saved.name ?? saved.id,
     );
-    conv.createdAt = saved.createdAt;
-    conv.messages = [...saved.messages];
-    return conv;
+    session.createdAt = saved.createdAt;
+    session.messages = [...saved.messages];
+    return session;
   }
 }
