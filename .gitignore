@@ -4,3 +4,6 @@ data
 .env
 
 ACF
+.claude
+CLAUDE.md
+handoff.md

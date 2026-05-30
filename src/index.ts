@@ -14,9 +14,12 @@ import {
   formatEnvironmentForDisplay,
 } from "./core/environment.js";
 import { Session } from "./core/session.js";
-import { getTextContent } from "./core/agent-message.js";
 import { SessionManager } from "./core/history.js";
 import { createProvider } from "./providers/index.js";
+import { ToolRegistry } from "./tools/registry.js";
+import { ExecutorRegistry, ToolExecutor } from "./tools/executor.js";
+import { PermissionGate } from "./tools/permission-gate.js";
+import { parseResponse } from "./core/parser.js";
 
 // -----------------------------------------------------------------------
 // Initialize
@@ -24,9 +27,12 @@ import { createProvider } from "./providers/index.js";
 
 const provider = createProvider(getActiveModel());
 const tokenTracker = new TokenTracker();
-// const session = new Session(); //dont create here; resume session added for this
 const systemPrompt = buildSystemPrompt();
 const sessionManager = new SessionManager();
+const toolRegistry = new ToolRegistry();
+const executorRegistry = new ExecutorRegistry();
+const permissionGate = new PermissionGate();
+const toolExecutor = new ToolExecutor(toolRegistry, executorRegistry, permissionGate);
 
 const resumeChat = process.argv.includes("--resume");
 
@@ -49,37 +55,71 @@ if (resumeChat) {
 }
 
 // -----------------------------------------------------------------------
-// Multi-Turn Chat — routes to Anthropic or OpenAI based on config // (to-do: add other models.)
+// Agent Loop
 // -----------------------------------------------------------------------
+
+const MAX_ITERATIONS = 10;
+const MAX_TOOL_CALLS = 50;
 
 async function chat(userInput: string): Promise<string> {
   session.addUserMessage(userInput);
 
-  const response = await provider.generate(session.getMessages(), systemPrompt.text);
-  const responseText = getTextContent(response.message) || "(no text response)";
-  const { inputTokens, outputTokens } = response.usage;
+  const tools = toolRegistry.getAll();
+  let iteration = 0;
+  let totalToolCalls = 0;
+  let finalText = "(no text response)";
 
-  tokenTracker.recordUsage({ inputTokens, outputTokens });
-  session.addAssistantMessage(responseText);
+  while (true) {
+    if (iteration >= MAX_ITERATIONS) {
+      console.warn(`  [warn] Max iterations (${MAX_ITERATIONS}) reached — stopping loop`);
+      break;
+    }
 
-  const utilization = contextUtilization(inputTokens);
-  const stats = session.getStats();
+    const response = await provider.generate(session.getMessages(), systemPrompt.text, tools);
+    const parsed = parseResponse(response);
+    const { inputTokens, outputTokens } = response.usage;
 
-  let warning = "";
-  if (stats.budgetWarning == "caution") {
-    warning = "*** CAUTION : Your have used 60% of your context. Be aware.";
-  } else if (stats.budgetWarning == "critical") {
-    warning = "*** WARNING : You have used 80% of your context. Its recommended to use /clear to free up context ";
+    tokenTracker.recordUsage({ inputTokens, outputTokens });
+    session.addAssistantMessageWithBlocks(response.message.content);
+
+    const utilization = contextUtilization(inputTokens);
+    const stats = session.getStats();
+
+    console.log();
+    console.log(`  [Turn ${stats.turnCount} · iter ${iteration + 1}] ${inputTokens} in → ${outputTokens} out | Window: ${utilization.toFixed(1)}% used`);
+    if (stats.budgetWarning === "caution") {
+      console.log("  *** CAUTION: You have used 60% of your context. Be aware.");
+    } else if (stats.budgetWarning === "critical") {
+      console.log("  *** WARNING: You have used 80% of your context. Recommended to use /clear.");
+    }
+    console.log();
+
+    iteration++;
+
+    if (!parsed.shouldContinue) {
+      finalText = parsed.text || "(no text response)";
+      break;
+    }
+
+    if (totalToolCalls + parsed.toolCalls.length > MAX_TOOL_CALLS) {
+      console.warn(`  [warn] Max tool calls (${MAX_TOOL_CALLS}) would be exceeded — stopping loop`);
+      break;
+    }
+
+    for (const toolCall of parsed.toolCalls) {
+      console.log(`  [tool] ${toolCall.name}  ${JSON.stringify(toolCall.input)}`);
+      const result = await toolExecutor.execute(toolCall);
+      session.addToolResult(
+        result.toolCallId,
+        result.toolName,
+        result.serializedOutput ?? result.error ?? ""
+      );
+      console.log(`  [done] ${result.toolName}  ${result.status}  (${result.durationMs}ms)`);
+      totalToolCalls++;
+    }
   }
 
-  console.log();
-  console.log(
-    `  [Turn ${stats.turnCount}] ${inputTokens} in → ${outputTokens} out | Window: ${utilization.toFixed(1)}% used`,
-  );
-  if (warning) console.log(`  ${warning}`);
-  console.log();
-
-  return responseText;
+  return finalText;
 }
 
 // -----------------------------------------------------------------------
