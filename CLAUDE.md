@@ -67,16 +67,16 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
   - `context.ts` — `ToolExecutionContext`, `ToolHandler` type, `PermissionOverrideMap`
   - `permission-gate.ts` — pure policy: `isReadOnly` → always `auto`; override → `defaultPermission`
   - `executor.ts` — `ExecutorRegistry` + `ToolExecutor`: 8-step pipeline, timeout, `ask` prompt, hook stubs
+- **AgentMessage normalized types** (`src/core/agent-message.ts`) — provider-agnostic `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `SystemMessage` union; `AssistantMessage.content` is always `AssistantContentBlock[]`; helper functions `getTextContent`, `getToolCalls`, `isToolCallMessage`
+- **LLMProvider abstraction** (`src/providers/`) — `LLMProvider` interface + `LLMResponse` type; `AnthropicProvider` and `OpenAIProvider` implementations; `createProvider()` factory; full `AgentMessage[]` ↔ SDK format translation in each provider; `stopReason` normalized across providers
 
 ### In Progress (Specced, Not Yet Built)
 
-- **Spec 07** — `AgentMessage` normalized types replacing `Anthropic.MessageParam` in session
-- **Spec 08** — `LLMProvider` abstraction replacing dual-branch `chat()` in `index.ts`
 - **Spec 09** — `parser.ts` normalizing `LLMResponse` → `ParsedResponse` + `ToolCall[]`
 
 ### Not Yet Implemented
 
-- Tool implementations (`read_file`, `write_file`, `bash`, `list_directory`) — blocked on specs 07–09
+- Tool implementations (`read_file`, `write_file`, `bash`, `list_directory`) — blocked on spec 09
 - Agent loop upgrade (tool_use → execute → feed back → loop)
 - Persistent memory across sessions
 - Session compression
@@ -108,25 +108,24 @@ The project is a ground-up TypeScript rewrite of a prior Python implementation (
 ### Current Flow
 
 ```
-Startup: load env, init SessionManager
+Startup: load env, init SessionManager, createProvider(getActiveModel())
   ↓ --resume flag? → load most recent saved session : create new Session
       ↓
 User types input
       ↓
-Session.addUserMessage(input)
+Session.addUserMessage(input)          → stored as AgentMessage (UserMessage)
       ↓
-getActiveModel().provider === "anthropic"?   ← tech debt: specs 07–09 replace this branch
-  → anthropic.messages.create(...)
-  : openai.chat.completions.create(...)
+provider.generate(session.getMessages(), systemPrompt.text)
+  → AnthropicProvider or OpenAIProvider (selected at startup by createProvider)
+  → translates AgentMessage[] → SDK format internally
+  → returns LLMResponse { message: AssistantMessage, usage, stopReason }
       ↓
 tokenTracker.recordUsage({ inputTokens, outputTokens })
       ↓
-Session.addAssistantMessage(responseText)
+Session.addAssistantMessage(responseText)   → stored as AssistantMessage with content blocks
       ↓
 Print response + per-turn token stats
 ```
-
-**Note:** Session currently stores `Anthropic.MessageParam` — provider-coupled. Spec 07 (`AgentMessage`) and Spec 08 (`LLMProvider`) replace this with a normalized, provider-agnostic flow.
 
 ### Module Responsibilities
 
@@ -148,6 +147,11 @@ Print response + per-turn token stats
 | `src/tools/context.ts`        | `ToolExecutionContext` (future-shaped with stubs), `ToolHandler` type, `PermissionOverrideMap`                      |
 | `src/tools/permission-gate.ts`| `PermissionGate`: pure policy, zero I/O — `isReadOnly→auto`, override, then `defaultPermission`                    |
 | `src/tools/executor.ts`       | `ExecutorRegistry` + `ToolExecutor`: 8-step pipeline, timeout, `ask` prompt, `beforeExecute`/`afterExecute` stubs  |
+| `src/core/agent-message.ts`   | Normalized internal message types (`AgentMessage` union); helper functions `getTextContent`, `getToolCalls`, `isToolCallMessage`; zero imports |
+| `src/providers/types.ts`      | `LLMProvider` interface + `LLMResponse` type; zero SDK imports                                                      |
+| `src/providers/anthropic.ts`  | `AnthropicProvider`: translates `AgentMessage[]` ↔ Anthropic SDK format; maps `stop_reason` → `stopReason`         |
+| `src/providers/openai.ts`     | `OpenAIProvider`: translates `AgentMessage[]` ↔ OpenAI SDK format; maps `finish_reason` → `stopReason`             |
+| `src/providers/index.ts`      | `createProvider(activeModel)` factory — only place provider selection logic lives                                   |
 
 ### Model Routing (config.ts)
 
@@ -197,6 +201,11 @@ chamber/
 │   │   ├── context.ts            # ToolExecutionContext, ToolHandler, PermissionOverrideMap
 │   │   ├── permission-gate.ts    # PermissionGate: pure policy, zero I/O
 │   │   └── executor.ts           # ExecutorRegistry + ToolExecutor: full pipeline
+│   ├── providers/
+│   │   ├── types.ts              # LLMProvider interface, LLMResponse type — zero SDK imports
+│   │   ├── anthropic.ts          # AnthropicProvider: AgentMessage[] ↔ Anthropic SDK
+│   │   ├── openai.ts             # OpenAIProvider: AgentMessage[] ↔ OpenAI SDK
+│   │   └── index.ts              # createProvider() factory + re-exports
 │   └── prompts/
 │       └── coding-agent.md       # System prompt template
 ├── data/
