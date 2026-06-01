@@ -1,8 +1,8 @@
-import * as readline from "node:readline";
 import type { ToolCall, ToolResult, ToolStatus } from "./types.js";
 import type { ToolExecutionContext } from "./context.js";
 import type { ExecutorRunOptions } from "./build-tool.js";
 import { PermissionGate } from "./permission-gate.js";
+import type { Interface as ReadlineInterface } from "node:readline";
 
 function makeResult(
   toolCall: ToolCall,
@@ -31,28 +31,38 @@ function makeResult(
   };
 }
 
-async function promptUser(toolCall: ToolCall): Promise<boolean> {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    const inputDisplay = JSON.stringify(toolCall.input, null, 2);
-    rl.question(
-      `\n  Tool: ${toolCall.name}\n  Input: ${inputDisplay}\n  Allow? [y/N]: `,
-      (answer) => {
-        rl.close();
-        resolve(answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes");
-      },
-    );
-  });
-}
-
 export class ToolExecutor {
   private permissionGate: PermissionGate;
+  private rl: ReadlineInterface | null = null;
 
   constructor(permissionGate: PermissionGate) {
     this.permissionGate = permissionGate;
+  }
+
+  setReadline(rl: ReadlineInterface): void {
+    this.rl = rl;
+  }
+
+  private promptUser(toolCall: ToolCall): Promise<boolean> {
+    return new Promise((resolve) => {
+      const inputDisplay = JSON.stringify(toolCall.input, null, 2);
+      const question = `\n  Tool: ${toolCall.name}\n  Input: ${inputDisplay}\n  Allow? [y/N]: `;
+
+      if (this.rl) {
+        this.rl.question(question, (answer) => {
+          resolve(answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes");
+        });
+      } else {
+        process.stdout.write(question);
+        process.stdin.resume();
+        process.stdin.setEncoding("utf8");
+        process.stdin.once("data", (data) => {
+          process.stdin.pause();
+          const answer = String(data).trim().toLowerCase();
+          resolve(answer === "y" || answer === "yes");
+        });
+      }
+    });
   }
 
   async run(options: ExecutorRunOptions): Promise<ToolResult> {
@@ -66,7 +76,7 @@ export class ToolExecutor {
     }
 
     if (verdict === "ask") {
-      const approved = await promptUser(toolCall);
+      const approved = await this.promptUser(toolCall);
       if (!approved) {
         return makeResult(toolCall, "cancelled", false, null, `Tool "${toolCall.name}" was denied by user`);
       }

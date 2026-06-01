@@ -181,6 +181,7 @@ async function main(): Promise<void> {
     input: process.stdin,
     output: process.stdout,
   });
+  toolExecutor.setReadline(rl);
 
   const prompt = (): void => {
     rl.question("You: ", async (input) => {

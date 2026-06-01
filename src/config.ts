@@ -26,11 +26,11 @@ export const config = {
     },
     fast: {
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: "openai/gpt-oss-20b",
     },
     cheap: {
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: "openai/gpt-oss-20b",
     },
   },
 
