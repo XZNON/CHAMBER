@@ -1,7 +1,11 @@
 import type { ToolObject } from "./build-tool.js";
+import { FileReadTool } from "./implementations/file-read/tool.js";
+import { FileWriteTool } from "./implementations/file-write/tool.js";
+import { FileEditTool } from "./implementations/file-edit/tool.js";
+import { GlobTool } from "./implementations/glob/tool.js";
 
 export function getTools(): ToolObject[] {
-  return [];
+  return [FileReadTool, FileWriteTool, FileEditTool, GlobTool];
 }
 
 export function findToolByName(
