@@ -12,7 +12,3 @@ export interface ToolExecutionContext {
   // Part 18: tracingId?: string
 }
 
-export type ToolHandler = (
-  input: Record<string, unknown>,
-  context: ToolExecutionContext,
-) => Promise<unknown>;

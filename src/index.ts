@@ -16,9 +16,9 @@ import {
 import { Session } from "./core/session.js";
 import { SessionManager } from "./core/history.js";
 import { createProvider } from "./providers/index.js";
-import { ToolRegistry } from "./tools/registry.js";
-import { ExecutorRegistry, ToolExecutor } from "./tools/executor.js";
+import { ToolExecutor } from "./tools/executor.js";
 import { PermissionGate } from "./tools/permission-gate.js";
+import { getTools, findToolByName } from "./tools/tools.js";
 import { parseResponse } from "./core/parser.js";
 
 // -----------------------------------------------------------------------
@@ -29,10 +29,8 @@ const provider = createProvider(getActiveModel());
 const tokenTracker = new TokenTracker();
 const systemPrompt = buildSystemPrompt();
 const sessionManager = new SessionManager();
-const toolRegistry = new ToolRegistry();
-const executorRegistry = new ExecutorRegistry();
 const permissionGate = new PermissionGate();
-const toolExecutor = new ToolExecutor(toolRegistry, executorRegistry, permissionGate);
+const toolExecutor = new ToolExecutor(permissionGate);
 
 const resumeChat = process.argv.includes("--resume");
 
@@ -64,7 +62,7 @@ const MAX_TOOL_CALLS = 50;
 async function chat(userInput: string): Promise<string> {
   session.addUserMessage(userInput);
 
-  const tools = toolRegistry.getAll();
+  const tools = getTools();
   let iteration = 0;
   let totalToolCalls = 0;
   let finalText = "(no text response)";
@@ -75,7 +73,7 @@ async function chat(userInput: string): Promise<string> {
       break;
     }
 
-    const response = await provider.generate(session.getMessages(), systemPrompt.text, tools);
+    const response = await provider.generate(session.getMessages(), systemPrompt.text, tools.map(t => t.definition));
     const parsed = parseResponse(response);
     const { inputTokens, outputTokens } = response.usage;
 
@@ -108,7 +106,12 @@ async function chat(userInput: string): Promise<string> {
 
     for (const toolCall of parsed.toolCalls) {
       console.log(`  [tool] ${toolCall.name}  ${JSON.stringify(toolCall.input)}`);
-      const result = await toolExecutor.execute(toolCall);
+      const resolvedTool = findToolByName(tools, toolCall.name);
+      if (!resolvedTool) {
+        console.warn(`  [warn] Unknown tool "${toolCall.name}" — skipping`);
+        continue;
+      }
+      const result = await toolExecutor.run({ tool: resolvedTool, toolCall });
       session.addToolResult(
         result.toolCallId,
         result.toolName,

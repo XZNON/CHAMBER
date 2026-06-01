@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import type { ToolDefinition } from "./types.js";
-import type { ToolRegistry } from "./registry.js";
 
 export function toAnthropicTool(def: ToolDefinition): Anthropic.Tool {
   return {
@@ -16,10 +15,6 @@ export function toAnthropicTool(def: ToolDefinition): Anthropic.Tool {
       ...(def.inputSchema.required && { required: def.inputSchema.required }),
     },
   };
-}
-
-export function registryToAnthropic(registry: ToolRegistry): Anthropic.Tool[] {
-  return registry.getAll().map(toAnthropicTool);
 }
 
 export function toOpenAITool(
@@ -40,10 +35,4 @@ export function toOpenAITool(
       },
     },
   };
-}
-
-export function registryToOpenAI(
-  registry: ToolRegistry,
-): OpenAI.Chat.ChatCompletionTool[] {
-  return registry.getAll().map(toOpenAITool);
 }
