@@ -1,32 +1,8 @@
 import * as readline from "node:readline";
 import type { ToolCall, ToolResult, ToolStatus } from "./types.js";
-import type { ToolRegistry } from "./registry.js";
-import type { ToolHandler } from "./context.js";
-import { type ToolExecutionContext } from "./context.js";
+import type { ToolExecutionContext } from "./context.js";
+import type { ExecutorRunOptions } from "./build-tool.js";
 import { PermissionGate } from "./permission-gate.js";
-
-export class ExecutorRegistry {
-  private handlers: Map<string, ToolHandler> = new Map();
-
-  register(name: string, handler: ToolHandler): void {
-    if (this.handlers.has(name)) {
-      throw new Error(`Handler for tool "${name}" is already registered`);
-    }
-    this.handlers.set(name, handler);
-  }
-
-  get(name: string): ToolHandler | undefined {
-    return this.handlers.get(name);
-  }
-
-  has(name: string): boolean {
-    return this.handlers.has(name);
-  }
-
-  unregister(name: string): void {
-    this.handlers.delete(name);
-  }
-}
 
 function makeResult(
   toolCall: ToolCall,
@@ -73,37 +49,16 @@ async function promptUser(toolCall: ToolCall): Promise<boolean> {
 }
 
 export class ToolExecutor {
-  private toolRegistry: ToolRegistry;
-  private executorRegistry: ExecutorRegistry;
   private permissionGate: PermissionGate;
 
-  constructor(
-    toolRegistry: ToolRegistry,
-    executorRegistry: ExecutorRegistry,
-    permissionGate: PermissionGate,
-  ) {
-    this.toolRegistry = toolRegistry;
-    this.executorRegistry = executorRegistry;
+  constructor(permissionGate: PermissionGate) {
     this.permissionGate = permissionGate;
   }
 
-  async execute(
-    toolCall: ToolCall,
-    context?: ToolExecutionContext,
-  ): Promise<ToolResult> {
-    // Step 1: Look up definition
-    const def = this.toolRegistry.get(toolCall.name);
-    if (!def) {
-      return makeResult(toolCall, "failed", false, null, `Unknown tool: "${toolCall.name}"`);
-    }
+  async run(options: ExecutorRunOptions): Promise<ToolResult> {
+    const { tool, toolCall, context } = options;
+    const def = tool.definition;
 
-    // Step 2: Look up handler
-    const handler = this.executorRegistry.get(toolCall.name);
-    if (!handler) {
-      return makeResult(toolCall, "failed", false, null, `No handler registered for tool "${toolCall.name}"`);
-    }
-
-    // Step 3: Permission check
     const verdict = this.permissionGate.check(def);
 
     if (verdict === "deny") {
@@ -117,7 +72,6 @@ export class ToolExecutor {
       }
     }
 
-    // Step 4: Build execution context (spread — never mutate incoming)
     const executionContext: ToolExecutionContext = {
       ...context,
       startedAt: Date.now(),
@@ -128,8 +82,7 @@ export class ToolExecutor {
     const startTime = executionContext.startedAt ?? Date.now();
 
     try {
-      // Step 5: Run with optional timeout
-      let outputPromise = handler(toolCall.input, executionContext);
+      let outputPromise = tool.call(toolCall.input, executionContext);
 
       if (def.timeoutMs !== undefined) {
         const timeoutMs = def.timeoutMs;
@@ -139,7 +92,7 @@ export class ToolExecutor {
             timeoutMs,
           ),
         );
-        // NOTE: Promise.race() returns timed_out result but does NOT stop handler execution.
+        // Promise.race() returns timed_out result but does NOT stop handler execution.
         // Handler runs to completion in background until abortSignal cancels it (Part 16).
         outputPromise = Promise.race([outputPromise, timeoutPromise]);
       }
