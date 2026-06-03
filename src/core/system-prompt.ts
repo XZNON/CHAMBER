@@ -26,6 +26,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { detectEnvironment, type EnvironmentInfo } from "./environment.js";
 import { estimateTokens } from "./tokens.js";
 
@@ -67,7 +68,7 @@ You help users with software engineering tasks including writing code, debugging
 function loadTemplate(): string {
   try {
     const templatePath = path.join(
-      import.meta.dirname ?? process.cwd(),
+      path.dirname(fileURLToPath(import.meta.url)),
       "..",
       "prompts",
       "coding-agent.md",
@@ -99,12 +100,14 @@ export interface TemplateVariables {
   date: string;
   home_directory: string;
   username: string;
+  available_tools: string;
+  permission_guidance: string;
 }
 
 /**
- * Build template variables from the detected environment.
+ * Build template variables from the detected environment and tools listing.
  */
-function buildVariables(env: EnvironmentInfo): TemplateVariables {
+function buildVariables(env: EnvironmentInfo, toolsListing: string): TemplateVariables {
   return {
     working_directory: env.workingDirectory,
     os_name: env.osName,
@@ -113,6 +116,9 @@ function buildVariables(env: EnvironmentInfo): TemplateVariables {
     date: env.date,
     home_directory: env.homeDirectory,
     username: env.username,
+    available_tools: toolsListing,
+    permission_guidance:
+      "All bash_exec commands require explicit user approval before execution. Blocked and auto-approved command lists are not yet configured.",
   };
 }
 
@@ -156,9 +162,9 @@ export interface SystemPromptResult {
  * - Include memory file contents (Ch 11)
  * - Add permission mode instructions (Ch 16)
  */
-export function buildSystemPrompt(): SystemPromptResult {
+export function buildSystemPrompt(toolsListing: string = ""): SystemPromptResult {
   const env = detectEnvironment();
-  const variables = buildVariables(env);
+  const variables = buildVariables(env, toolsListing);
   const template = loadTemplate();
   const text = renderTemplate(template, variables);
 

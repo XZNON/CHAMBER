@@ -3,9 +3,16 @@ import { FileReadTool } from "./implementations/file-read/tool.js";
 import { FileWriteTool } from "./implementations/file-write/tool.js";
 import { FileEditTool } from "./implementations/file-edit/tool.js";
 import { GlobTool } from "./implementations/glob/tool.js";
+import { BashTool } from "./implementations/bash/tool.js";
 
 export function getTools(): ToolObject[] {
-  return [FileReadTool, FileWriteTool, FileEditTool, GlobTool];
+  return [FileReadTool, FileWriteTool, FileEditTool, GlobTool, BashTool];
+}
+
+export function formatToolsForPrompt(): string {
+  return getTools()
+    .map((t) => `- **${t.definition.name}**: ${t.definition.description.split("\n")[0]}`)
+    .join("\n");
 }
 
 export function findToolByName(
