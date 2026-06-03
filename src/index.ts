@@ -18,7 +18,7 @@ import { SessionManager } from "./core/history.js";
 import { createProvider } from "./providers/index.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { PermissionGate } from "./tools/permission-gate.js";
-import { getTools, findToolByName } from "./tools/tools.js";
+import { getTools, findToolByName, formatToolsForPrompt } from "./tools/tools.js";
 import { parseResponse } from "./core/parser.js";
 
 // -----------------------------------------------------------------------
@@ -27,7 +27,7 @@ import { parseResponse } from "./core/parser.js";
 
 const provider = createProvider(getActiveModel());
 const tokenTracker = new TokenTracker();
-const systemPrompt = buildSystemPrompt();
+const systemPrompt = buildSystemPrompt(formatToolsForPrompt());
 const sessionManager = new SessionManager();
 const permissionGate = new PermissionGate();
 const toolExecutor = new ToolExecutor(permissionGate);
