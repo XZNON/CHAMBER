@@ -3,10 +3,11 @@ import { FileReadTool } from "./implementations/file-read/tool.js";
 import { FileWriteTool } from "./implementations/file-write/tool.js";
 import { FileEditTool } from "./implementations/file-edit/tool.js";
 import { GlobTool } from "./implementations/glob/tool.js";
+import { GrepTool } from "./implementations/grep/tool.js";
 import { BashTool } from "./implementations/bash/tool.js";
 
 export function getTools(): ToolObject[] {
-  return [FileReadTool, FileWriteTool, FileEditTool, GlobTool, BashTool];
+  return [FileReadTool, FileWriteTool, FileEditTool, GlobTool, GrepTool, BashTool];
 }
 
 export function formatToolsForPrompt(): string {
