@@ -1,14 +1,15 @@
-import type { ActiveModelConfig } from "../config.js";
+import type { ModelEntry } from "../config.js";
 import { config } from "../config.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { OpenAIProvider } from "./openai.js";
 import type { LLMProvider } from "./types.js";
 
-export function createProvider(activeModel: ActiveModelConfig): LLMProvider {
-  if (activeModel.provider === "anthropic") {
-    return new AnthropicProvider(activeModel.model, config.maxTokens);
+export function createProvider(entry: ModelEntry): LLMProvider {
+  if (entry.provider === "anthropic") {
+    return new AnthropicProvider(entry.model, config.maxTokens);
   }
-  return new OpenAIProvider(activeModel.model, config.maxTokens);
+  const apiKey = process.env[entry.apiKeyEnv];
+  return new OpenAIProvider(entry.model, config.maxTokens, entry.baseURL, apiKey);
 }
 
 export type { LLMProvider, LLMResponse } from "./types.js";

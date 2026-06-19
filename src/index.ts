@@ -1,7 +1,7 @@
 import "dotenv/config";
 import "./silence.js";
 import * as readline from "node:readline";
-import { getActiveModel, getActiveModelName } from "./config.js";
+import { config, modelRegistry, getModelById, getActiveModelName, type ModelEntry } from "./config.js";
 import {
   TokenTracker,
   calculateBudget,
@@ -16,6 +16,7 @@ import {
 import { Session } from "./core/session.js";
 import { SessionManager } from "./core/history.js";
 import { createProvider } from "./providers/index.js";
+import type { LLMProvider } from "./providers/index.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { PermissionGate } from "./tools/permission-gate.js";
 import { getTools, findToolByName, formatToolsForPrompt } from "./tools/tools.js";
@@ -25,7 +26,9 @@ import { parseResponse } from "./core/parser.js";
 // Initialize
 // -----------------------------------------------------------------------
 
-const provider = createProvider(getActiveModel());
+let activeEntry: ModelEntry = getModelById(config.defaultModel);
+let provider: LLMProvider = createProvider(activeEntry);
+
 const tokenTracker = new TokenTracker();
 const systemPrompt = buildSystemPrompt(formatToolsForPrompt());
 const sessionManager = new SessionManager();
@@ -157,9 +160,7 @@ async function main(): Promise<void> {
   console.log();
   console.log(formatEnvironmentForDisplay(env));
   console.log();
-  console.log(
-    `  Model:          ${getActiveModelName()} (${getActiveModel().provider})`,
-  );
+  console.log(`  Model:          ${activeEntry.displayName} (${activeEntry.group})`);
   console.log(`  Context window: ${formatTokenCount(budget.total)} tokens`);
   console.log(`  System prompt:  ~${systemPrompt.estimatedTokens} tokens`);
   console.log(`  Session: ${stats.name ? stats.name : stats.id}`);
@@ -172,7 +173,7 @@ async function main(): Promise<void> {
   }
   console.log();
   console.log(
-    "  Commands: /clear (reset), /stats (usage), /prompt (view), /save, /history, /resume, /rename, quit",
+    "  Commands: /clear (reset), /stats (usage), /prompt (view), /save, /history, /resume, /rename, /model, quit",
   );
   console.log("-".repeat(terminalWidth));
   console.log();
@@ -233,7 +234,7 @@ async function main(): Promise<void> {
         prompt();
         return;
       }
-      // todo : bash mode :!xcgfjsdlf for bash commands hahaha
+
       if (trimmed.toLocaleLowerCase().startsWith("/resume")) {
         const parts = trimmed.split(/\s+/);
         let userInput: string | undefined;
@@ -330,20 +331,53 @@ async function main(): Promise<void> {
         return;
       }
 
+      if (trimmed.toLowerCase() === "/model") {
+        console.log("\n  Pick a model:\n");
+        const groups = [...new Set(modelRegistry.map(m => m.group))];
+        let idx = 1;
+        const flat: ModelEntry[] = [];
+        for (const group of groups) {
+          console.log(`    ${group}`);
+          for (const entry of modelRegistry.filter(m => m.group === group)) {
+            const marker = entry.id === activeEntry.id ? " ← current" : "";
+            console.log(`      [${idx}] ${entry.displayName}${marker}`);
+            flat.push(entry);
+            idx++;
+          }
+        }
+        console.log();
+        rl.question(`  Select [1-${flat.length}]: `, (choice) => {
+          const num = parseInt(choice.trim(), 10);
+          const selected = flat[num - 1];
+          if (!selected) {
+            console.log("  Invalid choice.\n");
+            prompt();
+            return;
+          }
+          if (!process.env[selected.apiKeyEnv]) {
+            console.warn(`  Warning: ${selected.apiKeyEnv} is not set in .env — API calls will fail.\n`);
+          }
+          activeEntry = selected;
+          provider = createProvider(activeEntry);
+          console.log(`  Switched to ${selected.displayName} (${selected.group})\n`);
+          prompt();
+        });
+        return;
+      }
+
       try {
         const response = await chat(trimmed);
         console.log(`CHAMBER: ${response}`);
         console.log();
       } catch (error) {
         if (error instanceof Error) {
-          console.error(`Error: ${error.message}`);
-          if (
-            error.message.includes("API key") ||
-            error.message.includes("apiKey")
-          ) {
-            console.error(
-              `Hint: Set ${getActiveModel().provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"} in your .env file.`,
-            );
+          const status = (error as { status?: number }).status;
+          if (status === 401 || status === 403) {
+            console.error(`  [error] API key invalid or expired. Check ${activeEntry.apiKeyEnv} in .env`);
+          } else if (status === 429) {
+            console.error(`  [error] Rate limit hit or insufficient balance on ${activeEntry.group}.`);
+          } else {
+            console.error(`  [error] ${error.message}`);
           }
         }
         console.log();

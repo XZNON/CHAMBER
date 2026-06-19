@@ -14,10 +14,10 @@ export class OpenAIProvider implements LLMProvider {
   private model: string;
   private maxTokens: number;
 
-  constructor(model: string, maxTokens: number) {
+  constructor(model: string, maxTokens: number, baseURL?: string, apiKey?: string) {
     this.client = new OpenAI({
-      baseURL: "https://api.groq.com/openai/v1",
-      apiKey: process.env.GROQ_API_KEY,
+      ...(baseURL ? { baseURL } : {}),
+      apiKey: apiKey,
     });
     this.model = model;
     this.maxTokens = maxTokens;
