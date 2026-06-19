@@ -14,6 +14,7 @@ load instead of reading everything.
 ### Orientation
 | Doc | Read this when… |
 | --- | --- |
+| [`../STATE.md`](../STATE.md) | **Read first.** The living per-session snapshot — current phase, what's done, what's in progress, what's next. Updated at the end of every session. |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | You need the end-to-end flow, module responsibilities, or the shape of a core type before touching code. |
 | [`ROADMAP.md`](./ROADMAP.md) | You want the high-level view of what's built, what's next, and which of the 20 parts a task belongs to. |
 | [`TASKS.md`](./TASKS.md) | You want the actionable work board — concrete tasks with `id · area · status · deps` to pick up next. |
